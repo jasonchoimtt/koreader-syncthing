@@ -28,6 +28,7 @@ local Syncthing = WidgetContainer:extend{
 
 local pid_path = "/tmp/syncthing_koreader.pid"
 local config_path = "settings/syncthing/config.xml"
+local device_id_path = "settings/syncthing/device-id"
 
 function Syncthing:init()
     self.syncthing_port = G_reader_settings:readSetting("syncthing_port") or "8384"
@@ -184,6 +185,15 @@ function Syncthing:readConfig()
     return self:deserializeXMLString(xml_str)
 end
 
+function Syncthing:getDeviceId()
+    local file = io.open(device_id_path, "r")
+    if not file then return nil end
+    local device_id = file:read("l")
+    file:close()
+
+    return device_id
+end
+
 function Syncthing:apiCall(api_path, method, source)
     local config = self:readConfig()
     if not config then
@@ -258,14 +268,12 @@ function Syncthing:addToMainMenu(menu_items)
             },
             {
                 text_func = function()
-                    local config = self:readConfig()
-                    local device_id = config and config["configuration"]["device"]["_attr"]["id"]
+                    local device_id = self:getDeviceId()
                     return T(_("Device ID: %1"), device_id or "Unknown")
                 end,
                 keep_menu_open = true,
                 callback = function()
-                    local config = self:readConfig()
-                    local device_id = config and config["configuration"]["device"]["_attr"]["id"]
+                    local device_id = self:getDeviceId()
 
                     local info = InfoMessage:new{
                         timeout = 60,
@@ -278,8 +286,7 @@ function Syncthing:addToMainMenu(menu_items)
                 text = _("Show QR Code"),
                 keep_menu_open = true,
                 callback = function()
-                    local config = self:readConfig()
-                    local device_id = config and config["configuration"]["device"]["_attr"]["id"]
+                    local device_id = self:getDeviceId()
 
                     if device_id then
                         local info = QRMessage:new{

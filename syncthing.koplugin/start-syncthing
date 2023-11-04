@@ -18,6 +18,14 @@ if [ ! -f "$config_dir/config.xml" ]; then
         --skip-port-probing # Need this due to lack of IPv4 loopback in Kobo
 fi
 
+if [ ! -f "$config_dir/device-id" ]; then
+    # Save the device ID to a file for easy access from KOReader
+    "$syncthing" \
+        --config="$config_dir" \
+        --data="$config_dir" \
+        --device-id > "$config_dir/device-id"
+fi
+
 # We need to listen to 0.0.0.0 so that the GUI is accessible over the network
 "$syncthing" serve \
     --config="$config_dir" \
