@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 
 # Save config and data under the KOReader runtime directory
 config_dir=settings/syncthing
@@ -11,10 +12,18 @@ else
     port=8384
 fi
 
-if [ ! -f "$config_dir/config.xml" ]; then
+if [ -n "$2" ]; then
+    password=$2
+else
+    password=syncthing
+fi
+
+if [ ! -f "$config_dir/config.xml" ] || [ -n "$password" ]; then
     echo "Generating Syncthing configuration..."
     "$syncthing" generate \
         --config="$config_dir" \
+        --gui-user=syncthing \
+        --gui-password="$password" \
         --skip-port-probing # Need this due to lack of IPv4 loopback in Kobo
 fi
 

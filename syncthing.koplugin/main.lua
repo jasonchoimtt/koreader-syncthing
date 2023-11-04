@@ -16,6 +16,7 @@ local socket = require("socket")
 local socketutil = require("socketutil")
 local JSON = require("json")
 local Font = require("ui/font")
+local random = require("random")
 local T = ffiutil.template
 
 local path = DataStorage:getFullDataDir()
@@ -38,10 +39,16 @@ function Syncthing:init()
     self:onDispatcherRegisterActions()
 end
 
-function Syncthing:start()
-    local cmd = string.format("%s %s",
+function Syncthing:start(password)
+    if not password and not util.pathExists(config_path) then
+        -- Use a random initial password to make sure GUI is inaccessible unless the
+        -- user explicitly sets a password
+        password = random.uuid()
+    end
+    local cmd = string.format("%s %s %s",
         "./plugins/syncthing.koplugin/start-syncthing",
-        self.syncthing_port)
+        self.syncthing_port,
+        password or "")
 
     -- Start loopback interface so that we can access the Syncthing API later
     if Device:isKobo() then
@@ -477,7 +484,7 @@ function Syncthing:addToMainMenu(menu_items)
             },
             {
                 text_func = function()
-                    return T(_("Syncthing port: %1"), self.syncthing_port)
+                    return T(_("Syncthing Port: %1"), self.syncthing_port)
                 end,
                 keep_menu_open = true,
                 enabled_func = function() return not self:isRunning() end,
@@ -486,18 +493,56 @@ function Syncthing:addToMainMenu(menu_items)
                 end,
             },
             {
-                text = _("Syncthing web GUI"),
+                text = _("Syncthing Web GUI"),
                 keep_menu_open = true,
                 enabled_func = function() return self:isRunning() end,
-                separator = true,
                 callback = function()
                     local info = InfoMessage:new{
                         timeout = 60,
-                        text = T(_("Connect to port %1 for web GUI\n\n%2"),
+                        text = T(_("Connect to port %1 for web GUI\nYou must set a password first! Default username: syncthing\n\n%2"),
                             self.syncthing_port,
                             Device.retrieveNetworkInfo and Device:retrieveNetworkInfo() or _("Could not retrieve network info.")),
                     }
                     UIManager:show(info)
+                end,
+            },
+            {
+                text = _("Set GUI Password"),
+                keep_menu_open = true,
+                enabled_func = function() return not self:isRunning() end,
+                separator = true,
+                callback = function(touchmenu_instance)
+                    local dialog
+                    dialog = InputDialog:new{
+                        title = _("Set GUI Password"),
+                        input = "",
+                        text_type = "password",
+                        buttons = {
+                            {
+                                {
+                                    text = _("Cancel"),
+                                    id = "close",
+                                    callback = function()
+                                        UIManager:close(dialog)
+                                    end,
+                                },
+                                {
+                                    text = _("Set"),
+                                    is_enter_default = true,
+                                    callback = function()
+                                        if not dialog:getInputText() then
+                                            return
+                                        end
+                                        self:start(dialog:getInputText())
+                                        touchmenu_instance:updateItems()
+
+                                        UIManager:close(dialog)
+                                    end,
+                                },
+                            },
+                        },
+                    }
+                    UIManager:show(dialog)
                 end,
             },
             {
