@@ -252,15 +252,12 @@ function Syncthing:apiCall(api_path, method, source)
 end
 
 function Syncthing:getStatusMenu()
-    local config = self:apiCall("config")
+    local config = self:apiCall("config") or {}
     local connections = self:apiCall("system/connections") or {}
     local device_stats = self:apiCall("stats/device") or {}
     local folder_stats = self:apiCall("stats/folder") or {}
 
     local function getDeviceName(device_id)
-        if not config then
-            return ""
-        end
         for __, device in pairs(config["devices"] or {}) do
             if device["deviceID"] == device_id then
                 return device["name"]
