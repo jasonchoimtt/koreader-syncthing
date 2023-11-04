@@ -45,8 +45,9 @@ function Syncthing:start(password)
         -- user explicitly sets a password
         password = random.uuid()
     end
-    local cmd = string.format("%s %s %s",
+    local cmd = string.format("%s %s %s %s",
         "./plugins/syncthing.koplugin/start-syncthing",
+        G_reader_settings:readSetting("home_dir"),
         self.syncthing_port,
         password or "")
 
@@ -295,8 +296,9 @@ function Syncthing:getStatusMenu()
             callback = function()
                 local info = InfoMessage:new{
                     face = Font:getFace("x_smallinfofont"),
-                    text = T(_("Folder ID: %1\nErrors: %2\nLocal total items: %3\nNeed items: %4\nNeed bytes: %5\nLast scan: %6\nLast file: %7\nLast file at: %8\nDevices:\n%9"),
+                    text = T(_("Folder ID: %1\nPath: %2\nErrors: %3\nLocal total items: %4\nNeed items: %5\nNeed bytes: %6\nLast scan: %7\nLast file: %8\nLast file at: %9\nDevices:\n%10"),
                         folder["id"],
+                        folder["path"],
                         status["errors"] or _("N/A"),
                         status["localTotalItems"] or _("N/A"),
                         status["needTotalItems"] or _("N/A"),
@@ -421,7 +423,9 @@ function Syncthing:getPendingMenu()
                 local dialog
                 dialog = InputDialog:new{
                     title = T(_("Add Folder %1?"), folder["label"]),
-                    input = string.format("/mnt/onboard/%s", folder["label"]),
+                    input = string.format("%s/%s",
+                        G_reader_settings:readSetting("home_dir"),
+                        folder["label"]),
                     input_type = "string",
                     buttons = {
                         {

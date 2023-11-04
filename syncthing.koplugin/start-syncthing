@@ -7,20 +7,28 @@ syncthing=plugins/syncthing.koplugin/syncthing
 pid_file=/tmp/syncthing_koreader.pid
 
 if [ -n "$1" ]; then
-    port=$1
+    home_dir=$1
+else
+    home_dir=/
+fi
+
+
+if [ -n "$2" ]; then
+    port=$2
 else
     port=8384
 fi
 
-if [ -n "$2" ]; then
-    password=$2
+if [ -n "$3" ]; then
+    password=$3
 else
     password=syncthing
 fi
 
 if [ ! -f "$config_dir/config.xml" ] || [ -n "$password" ]; then
     echo "Generating Syncthing configuration..."
-    "$syncthing" generate \
+    # Set HOME so that the default folder is created at $home_dir/Sync
+    HOME=$home_dir "$syncthing" generate \
         --config="$config_dir" \
         --gui-user=syncthing \
         --gui-password="$password" \
