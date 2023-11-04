@@ -2,6 +2,7 @@ local DataStorage = require("datastorage")
 local Device =  require("device")
 local Dispatcher = require("dispatcher")
 local InfoMessage = require("ui/widget/infomessage")  -- luacheck:ignore
+local QRMessage = require("ui/widget/qrmessage")
 local InputDialog = require("ui/widget/inputdialog")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
@@ -22,6 +23,7 @@ local Syncthing = WidgetContainer:extend{
 }
 
 local pid_path = "/tmp/syncthing_koreader.pid"
+local config_path = "settings/syncthing/config.xml"
 
 function Syncthing:init()
     self.syncthing_port = G_reader_settings:readSetting("syncthing_port") or "8384"
@@ -135,6 +137,36 @@ function Syncthing:show_port_dialog(touchmenu_instance)
     self.port_dialog:onShowKeyboard()
 end
 
+-- Function copied from newsdownloader.plugin
+function Syncthing:deserializeXMLString(xml_str)
+    -- uses LuaXML https://github.com/manoelcampos/LuaXML
+    -- The MIT License (MIT)
+    -- Copyright (c) 2016 Manoel Campos da Silva Filho
+    -- see: koreader/plugins/newsdownloader.koplugin/lib/LICENSE_LuaXML
+    local treehdl = require("lib/handler")
+    local libxml = require("lib/xml")
+    -- Instantiate the object that parses the XML file as a Lua table.
+    local xmlhandler = treehdl.simpleTreeHandler()
+
+    -- Remove UTF-8 byte order mark, as it will cause LuaXML to fail
+    xml_str = xml_str:gsub("^\xef\xbb\xbf", "", 1)
+
+    -- Instantiate the object that parses the XML to a Lua table.
+    local ok = pcall(function()
+            libxml.xmlParser(xmlhandler):parse(xml_str)
+    end)
+    if not ok then return end
+    return xmlhandler.root
+end
+
+function Syncthing:readConfig()
+    local file = io.open(config_path, "r")
+    if not file then return nil end
+    local xml_str = file:read("a")
+    file:close()
+
+    return self:deserializeXMLString(xml_str)
+end
 function Syncthing:addToMainMenu(menu_items)
     menu_items.syncthing = {
         text = _("Syncthing"),
@@ -150,7 +182,7 @@ function Syncthing:addToMainMenu(menu_items)
             },
             {
                 text_func = function()
-                    return T(_("Syncthing port (%1)"), self.syncthing_port)
+                    return T(_("Syncthing port: %1"), self.syncthing_port)
                 end,
                 keep_menu_open = true,
                 enabled_func = function() return not self:isRunning() end,
@@ -165,11 +197,46 @@ function Syncthing:addToMainMenu(menu_items)
                 callback = function()
                     local info = InfoMessage:new{
                         timeout = 60,
-                        text = T(_("Connect to port %1 for web GUI\n%2"),
+                        text = T(_("Connect to port %1 for web GUI\n\n%2"),
                             self.syncthing_port,
                             Device.retrieveNetworkInfo and Device:retrieveNetworkInfo() or _("Could not retrieve network info.")),
                     }
                     UIManager:show(info)
+                end,
+            },
+            {
+                text_func = function()
+                    local config = self:readConfig()
+                    local device_id = config and config["configuration"]["device"]["_attr"]["id"]
+                    return T(_("Device ID: %1"), device_id or "Unknown")
+                end,
+                keep_menu_open = true,
+                callback = function()
+                    local config = self:readConfig()
+                    local device_id = config and config["configuration"]["device"]["_attr"]["id"]
+
+                    local info = InfoMessage:new{
+                        timeout = 60,
+                        text = device_id or "Unknown"
+                    }
+                    UIManager:show(info)
+                end,
+            },
+            {
+                text = _("Show QR Code"),
+                keep_menu_open = true,
+                callback = function()
+                    local config = self:readConfig()
+                    local device_id = config and config["configuration"]["device"]["_attr"]["id"]
+
+                    if device_id then
+                        local info = QRMessage:new{
+                            text = device_id,
+                            width = Device.screen:getWidth(),
+                            height = Device.screen:getHeight()
+                        }
+                        UIManager:show(info)
+                    end
                 end,
             },
        }
