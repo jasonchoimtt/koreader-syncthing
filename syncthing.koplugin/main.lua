@@ -15,6 +15,7 @@ local ltn12 = require("ltn12")
 local socket = require("socket")
 local socketutil = require("socketutil")
 local JSON = require("json")
+local Font = require("ui/font")
 local T = ffiutil.template
 
 local path = DataStorage:getFullDataDir()
@@ -242,6 +243,104 @@ function Syncthing:apiCall(api_path, method, source)
     end
 end
 
+function Syncthing:getStatusMenu()
+    local config = self:apiCall("config")
+    local connections = self:apiCall("system/connections") or {}
+    local device_stats = self:apiCall("stats/device") or {}
+    local folder_stats = self:apiCall("stats/folder") or {}
+
+    local function getDeviceName(device_id)
+        if not config then
+            return ""
+        end
+        for __, device in pairs(config["devices"] or {}) do
+            if device["deviceID"] == device_id then
+                return device["name"]
+            end
+        end
+        return ""
+    end
+
+    local sub_item_table = {}
+
+    table.insert(sub_item_table, {
+        text = _("Folders"),
+        enabled_func = function() return false end
+    })
+
+    for __, folder in pairs(config["folders"] or {}) do
+        local status = self:apiCall(string.format("db/status?folder=%s", folder["id"])) or {}
+        local stat = folder_stats[folder["id"]] or {}
+
+        local state = status["state"]
+        if state == "idle" then
+            state = _("up to date")
+        end
+
+        table.insert(sub_item_table, {
+            text = T("%1: %2", folder["label"], state),
+            keep_menu_open = true,
+            callback = function()
+                local info = InfoMessage:new{
+                    face = Font:getFace("x_smallinfofont"),
+                    text = T(_("Folder ID: %1\nErrors: %2\nNeed files: %3\nNeed bytes: %4\nLast scan: %5\nLast file: %6\nLast file at: %7"),
+                        folder["id"],
+                        status["errors"] or _("N/A"),
+                        status["needFiles"] or _("N/A"),
+                        status["needBytes"] or _("N/A"),
+                        stat["lastScan"] or _("N/A"),
+                        stat["lastFile"] and stat["lastFile"]["filename"] or _("N/A"),
+                        stat["lastFile"] and stat["lastFile"]["at"] or _("N/A"))
+                }
+                UIManager:show(info)
+            end
+        })
+    end
+
+    sub_item_table[#sub_item_table].separator = true
+
+    table.insert(sub_item_table, {
+        text = _("Remote Devices"),
+        enabled_func = function() return false end
+    })
+
+    for device_id, connection in pairs(connections["connections"] or {}) do
+        local completion = self:apiCall(string.format("db/completion?device=%s", device_id)) or {}
+        local percentage = (completion["completion"] or "").."%"
+
+        local status
+        if connection["connected"] then
+            status = _("Connected")
+        else
+            local stat = device_stats[device_id] or {}
+            status = T(_("Last seen %1"), string.sub(stat["lastSeen"] or "", 1, 16)) -- YYYY-MM-DDTHH:MM
+        end
+
+        table.insert(sub_item_table, {
+            text = T("%1: %2, %3",
+                getDeviceName(device_id),
+                status,
+                percentage),
+            keep_menu_open = true,
+            callback = function()
+                local info = InfoMessage:new{
+                    face = Font:getFace("x_smallinfofont"),
+                    text = T(_("Device ID: %1\nAddress: %2\nConnected since: %3\nPaused: %4\nNeed items: %5\nNeed bytes: %6"),
+                        device_id,
+                        connection["connected"] and connection["address"] or _("N/A"),
+                        connection["connected"] and connection["startedAt"] or _("N/A"),
+                        connection["paused"] and _("Yes") or _("No"),
+                        completion["need_items"] or _("N/A"),
+                        completion["need_bytes"] or _("N/A")),
+                }
+                UIManager:show(info)
+            end
+        })
+    end
+
+    return sub_item_table
+end
+
 function Syncthing:getPendingMenu()
     local devices = self:apiCall("cluster/pending/devices") or {}
     local folders = self:apiCall("cluster/pending/folders") or {}
@@ -256,7 +355,7 @@ function Syncthing:getPendingMenu()
     for device_id, device in pairs(devices) do
         table.insert(sub_item_table, {
             text = T("%1 (%2)", device["name"], device_id),
-            callback = function(touchmenu_instance)
+            callback = function()
                 local dialog
                 dialog = InputDialog:new{
                     title = T(_("Add Device\n%1?"), device_id),
@@ -304,7 +403,7 @@ function Syncthing:getPendingMenu()
         local offerer, folder = pairs(offerers["offeredBy"])(offerers["offeredBy"])
         table.insert(sub_item_table, {
             text = T("%1 (From %2)", folder["label"], offerer),
-            callback = function(touchmenu_instance)
+            callback = function()
                 local dialog
                 dialog = InputDialog:new{
                     title = T(_("Add Folder %1?"), folder["label"]),
@@ -424,6 +523,14 @@ function Syncthing:addToMainMenu(menu_items)
                         }
                         UIManager:show(info)
                     end
+                end,
+            },
+            {
+                text = _("Status"),
+                keep_menu_open = true,
+                enabled_func = function() return self:isRunning() end,
+                sub_item_table_func = function()
+                    return self:getStatusMenu()
                 end,
             },
             {
