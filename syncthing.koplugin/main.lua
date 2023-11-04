@@ -14,6 +14,7 @@ local http = require("socket.http")
 local ltn12 = require("ltn12")
 local socket = require("socket")
 local socketutil = require("socketutil")
+local JSON = require("json")
 local T = ffiutil.template
 
 local path = DataStorage:getFullDataDir()
@@ -216,7 +217,8 @@ function Syncthing:apiCall(api_path, method, source)
         source  = source,
         sink    = ltn12.sink.table(sink),
         headers = {
-            ["X-API-Key"] = apiKey
+            ["X-API-Key"] = apiKey,
+            ["Content-Type"] = "application/json"
         }
     }))
     socketutil:reset_timeout()
@@ -224,9 +226,134 @@ function Syncthing:apiCall(api_path, method, source)
     if code ~= 200 then
         logger.dbg("Syncthing: HTTP response code <> 200. Response status:", status or code)
         logger.dbg("Syncthing: Response headers:", headers)
+        local info = InfoMessage:new{
+            icon = "notice-warning",
+            text = T(_("Syncthing error (%1)"), status or code),
+        }
+        UIManager:show(info)
         return nil
     end
-    return table.concat(sink)
+    local str = table.concat(sink)
+    local ok, result = pcall(JSON.decode, str)
+    if not ok then
+        return nil
+    else
+        return result
+    end
+end
+
+function Syncthing:getPendingMenu()
+    local devices = self:apiCall("cluster/pending/devices") or {}
+    local folders = self:apiCall("cluster/pending/folders") or {}
+
+    local sub_item_table = {}
+
+    table.insert(sub_item_table, {
+        text = #devices and _("Pending Devices") or _("No Pending Devices"),
+        enabled_func = function() return false end
+    })
+
+    for device_id, device in pairs(devices) do
+        table.insert(sub_item_table, {
+            text = T("%1 (%2)", device["name"], device_id),
+            callback = function(touchmenu_instance)
+                local dialog
+                dialog = InputDialog:new{
+                    title = T(_("Add Device\n%1?"), device_id),
+                    input = device["name"],
+                    input_type = "string",
+                    buttons = {
+                        {
+                            {
+                                text = _("Cancel"),
+                                id = "close",
+                                callback = function()
+                                    UIManager:close(dialog)
+                                end,
+                            },
+                            {
+                                text = _("Add"),
+                                is_enter_default = true,
+                                callback = function()
+                                    local body = ltn12.source.string(JSON.encode({
+                                        deviceID = device_id,
+                                        name = dialog:getInputText(),
+                                        _editing = "new-pending"
+                                    }))
+                                    self:apiCall("config/devices", "POST", body)
+
+                                    UIManager:close(dialog)
+                                end,
+                            },
+                        },
+                    },
+                }
+                UIManager:show(dialog)
+            end
+        })
+    end
+
+    sub_item_table[#sub_item_table].separator = true
+
+    table.insert(sub_item_table, {
+        text = #folders and _("Pending Folders") or _("No Pending Folders"),
+        enabled_func = function() return false end
+    })
+
+    for folder_id, offerers in pairs(folders) do
+        local offerer, folder = pairs(offerers["offeredBy"])(offerers["offeredBy"])
+        table.insert(sub_item_table, {
+            text = T("%1 (From %2)", folder["label"], offerer),
+            callback = function(touchmenu_instance)
+                local dialog
+                dialog = InputDialog:new{
+                    title = T(_("Add Folder %1?"), folder["label"]),
+                    input = string.format("/mnt/onboard/%s", folder["label"]),
+                    input_type = "string",
+                    buttons = {
+                        {
+                            {
+                                text = _("Cancel"),
+                                id = "close",
+                                callback = function()
+                                    UIManager:close(dialog)
+                                end,
+                            },
+                            {
+                                text = _("Add"),
+                                is_enter_default = true,
+                                callback = function()
+                                    local body = ltn12.source.string(JSON.encode({
+                                        id = folder_id,
+                                        label = folder["label"],
+                                        filesystemType = "basic",
+                                        path = dialog:getInputText(),
+                                        type = "sendreceive",
+                                        devices = {
+                                            {
+                                                deviceID = self:getDeviceId(),
+                                                introducedBy = ""
+                                            },
+                                            {
+                                                deviceID = offerer
+                                            }
+                                        },
+                                        _editing = "new-pending"
+                                    }))
+                                    self:apiCall("config/folders", "POST", body)
+
+                                    UIManager:close(dialog)
+                                end,
+                            },
+                        },
+                    },
+                }
+                UIManager:show(dialog)
+            end
+        })
+    end
+
+    return sub_item_table
 end
 
 function Syncthing:addToMainMenu(menu_items)
@@ -256,6 +383,7 @@ function Syncthing:addToMainMenu(menu_items)
                 text = _("Syncthing web GUI"),
                 keep_menu_open = true,
                 enabled_func = function() return self:isRunning() end,
+                separator = true,
                 callback = function()
                     local info = InfoMessage:new{
                         timeout = 60,
@@ -296,6 +424,14 @@ function Syncthing:addToMainMenu(menu_items)
                         }
                         UIManager:show(info)
                     end
+                end,
+            },
+            {
+                text = _("Pending"),
+                keep_menu_open = true,
+                enabled_func = function() return self:isRunning() end,
+                sub_item_table_func = function()
+                    return self:getPendingMenu()
                 end,
             },
        }
