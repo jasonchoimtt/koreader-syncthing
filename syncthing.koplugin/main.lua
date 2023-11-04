@@ -10,6 +10,10 @@ local ffiutil = require("ffi/util")
 local logger = require("logger")
 local util = require("util")
 local _ = require("gettext")
+local http = require("socket.http")
+local ltn12 = require("ltn12")
+local socket = require("socket")
+local socketutil = require("socketutil")
 local T = ffiutil.template
 
 local path = DataStorage:getFullDataDir()
@@ -35,6 +39,18 @@ function Syncthing:start()
     local cmd = string.format("%s %s",
         "./plugins/syncthing.koplugin/start-syncthing",
         self.syncthing_port)
+
+    -- Start loopback interface so that we can access the Syncthing API later
+    if Device:isKobo() then
+        if os.execute("ifconfig lo up") ~= 0 then
+            local info = InfoMessage:new{
+                    icon = "notice-warning",
+                    text = _("Failed to start Syncthing."),
+            }
+            UIManager:show(info)
+            return
+        end
+    end
 
     -- Make a hole in the Kindle's firewall
     if Device:isKindle() then
@@ -167,6 +183,42 @@ function Syncthing:readConfig()
 
     return self:deserializeXMLString(xml_str)
 end
+
+function Syncthing:apiCall(api_path, method, source)
+    local config = self:readConfig()
+    if not config then
+        error("Cannot extract API key")
+    end
+    local apiKey = config["configuration"]["gui"]["apikey"]
+
+    if not method then
+        method = "GET"
+    end
+
+    local url = string.format("http://127.0.0.1:8384/rest/%s", api_path)
+
+    logger.dbg("Syncthing: url:", url)
+    local sink = {}
+    socketutil:set_timeout(socketutil.LARGE_BLOCK_TIMEOUT, socketutil.LARGE_TOTAL_TIMEOUT)
+    local code, headers, status = socket.skip(1, http.request({
+        url     = url,
+        method  = method,
+        source  = source,
+        sink    = ltn12.sink.table(sink),
+        headers = {
+            ["X-API-Key"] = apiKey
+        }
+    }))
+    socketutil:reset_timeout()
+
+    if code ~= 200 then
+        logger.dbg("Syncthing: HTTP response code <> 200. Response status:", status or code)
+        logger.dbg("Syncthing: Response headers:", headers)
+        return nil
+    end
+    return table.concat(sink)
+end
+
 function Syncthing:addToMainMenu(menu_items)
     menu_items.syncthing = {
         text = _("Syncthing"),

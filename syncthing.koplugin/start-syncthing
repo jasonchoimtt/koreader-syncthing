@@ -19,8 +19,6 @@ if [ ! -f "$config_dir/config.xml" ]; then
 fi
 
 # We need to listen to 0.0.0.0 so that the GUI is accessible over the network
-# Also, Kobo devices do not appear to have an IPv4 loopback interface so using
-# 127.0.0.1 will not work
 "$syncthing" serve \
     --config="$config_dir" \
     --data="$config_dir" \
