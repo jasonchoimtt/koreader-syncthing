@@ -313,7 +313,7 @@ function Syncthing:getStatusMenu()
 
     for device_id, connection in pairs(connections["connections"] or {}) do
         local completion = self:apiCall(string.format("db/completion?device=%s", device_id)) or {}
-        local percentage = (completion["completion"] or "").."%"
+        local percentage = (completion["completion"] and math.floor(completion["completion"]) or "").."%"
 
         local status
         if connection["connected"] then
