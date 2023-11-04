@@ -277,20 +277,27 @@ function Syncthing:getStatusMenu()
             state = _("up to date")
         end
 
+        local devices = {}
+        for ___, device in pairs(folder["devices"]) do
+            table.insert(devices, "- "..getDeviceName(device["deviceID"]))
+        end
+
         table.insert(sub_item_table, {
             text = T("%1: %2", folder["label"], state),
             keep_menu_open = true,
             callback = function()
                 local info = InfoMessage:new{
                     face = Font:getFace("x_smallinfofont"),
-                    text = T(_("Folder ID: %1\nErrors: %2\nNeed files: %3\nNeed bytes: %4\nLast scan: %5\nLast file: %6\nLast file at: %7"),
+                    text = T(_("Folder ID: %1\nErrors: %2\nLocal total items: %3\nNeed items: %4\nNeed bytes: %5\nLast scan: %6\nLast file: %7\nLast file at: %8\nDevices:\n%9"),
                         folder["id"],
                         status["errors"] or _("N/A"),
-                        status["needFiles"] or _("N/A"),
+                        status["localTotalItems"] or _("N/A"),
+                        status["needTotalItems"] or _("N/A"),
                         status["needBytes"] or _("N/A"),
                         stat["lastScan"] or _("N/A"),
                         stat["lastFile"] and stat["lastFile"]["filename"] or _("N/A"),
-                        stat["lastFile"] and stat["lastFile"]["at"] or _("N/A"))
+                        stat["lastFile"] and stat["lastFile"]["at"] or _("N/A"),
+                        table.concat(devices, "\n")),
                 }
                 UIManager:show(info)
             end
