@@ -28,5 +28,6 @@ be managed directly in the KOReader menu.
 
 - [ ] Pull latest syncthing binary from official releases
 - [ ] Allow adding device to folder from e-reader
+- [ ] Properly accept three-way sharing
 - [ ] Fix global discovery service functionality
 - [ ] Implement conflict resolution for KOReader metadata file
