@@ -21,8 +21,6 @@ fi
 
 if [ -n "$3" ]; then
     password=$3
-else
-    password=syncthing
 fi
 
 if [ ! -f "$config_dir/config.xml" ] || [ -n "$password" ]; then
