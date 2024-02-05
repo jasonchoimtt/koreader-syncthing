@@ -215,7 +215,7 @@ function Syncthing:apiCall(api_path, method, source)
         method = "GET"
     end
 
-    local url = string.format("http://127.0.0.1:8384/rest/%s", api_path)
+    local url = string.format("http://127.0.0.1:%s/rest/%s", self.syncthing_port, api_path)
 
     logger.dbg("Syncthing: url:", url)
     local sink = {}
