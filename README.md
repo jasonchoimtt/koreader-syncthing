@@ -68,6 +68,12 @@ The method of running Syncthing is originally based on [The Anarcat's blog post]
   experience great. But having a Syncthing menu right in KOReader is the first
   step in making this accessible to the community.
 
+## Developing
+
+- Syncthing binaries are included in the repository from the [official
+  releases](https://syncthing.net/downloads/)
+  - Using Linux ARM 32-bit binary
+
 ## Limitations
 
 - Currently, global discovery and relay is not working. That means it will not
