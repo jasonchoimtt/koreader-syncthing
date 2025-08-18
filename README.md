@@ -7,6 +7,8 @@ instance on your e-reader can be managed directly in the KOReader menu.
 
 The method of running Syncthing is originally based on [The Anarcat's blog post](https://anarc.at/hardware/tablet/kobo-clara-hd/#install-syncthing).
 
+![Screenshot of koreader-syncthing](./assets/menus.png)
+
 ## Project status
 
 - This plugin is provided as-is. Make frequent data backups and use it
