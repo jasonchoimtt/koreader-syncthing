@@ -6,6 +6,7 @@ local QRMessage = require("ui/widget/qrmessage")
 local InputDialog = require("ui/widget/inputdialog")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
+local NetworkMgr = require("ui/network/manager")
 local ffiutil = require("ffi/util")
 local logger = require("logger")
 local util = require("util")
@@ -137,11 +138,15 @@ function Syncthing:stop()
     end
 end
 
-function Syncthing:onToggleSyncthingServer()
+function Syncthing:onToggleSyncthingServer(callback)
     if self:isRunning() then
         self:stop()
+        callback()
     else
-        self:start()
+        NetworkMgr:runWhenOnline(function()
+            self:start()
+            callback()
+        end)
     end
 end
 
@@ -495,8 +500,9 @@ function Syncthing:addToMainMenu(menu_items)
                 keep_menu_open = true,
                 checked_func = function() return self:isRunning() end,
                 callback = function(touchmenu_instance)
-                    self:onToggleSyncthingServer()
-                    touchmenu_instance:updateItems()
+                    self:onToggleSyncthingServer(function()
+                        touchmenu_instance:updateItems()
+                    end)
                 end,
             },
             {
