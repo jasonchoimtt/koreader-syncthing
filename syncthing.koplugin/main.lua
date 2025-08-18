@@ -35,11 +35,21 @@ local device_id_path = "settings/syncthing/device-id"
 
 function Syncthing:init()
     self.syncthing_port = G_reader_settings:readSetting("syncthing_port") or "8384"
+    self.autostart = G_reader_settings:isTrue("syncthing_autostart")
     self.ui.menu:registerToMainMenu(self)
     self:onDispatcherRegisterActions()
+
+    if self.autostart then
+        self:start()
+    end
 end
 
 function Syncthing:start(password)
+    if self:isRunning() then
+        logger.dbg("[Syncthing] Not starting Syncthing, already running.")
+        return
+    end
+
     if not password and not util.pathExists(config_path) then
         -- Use a random initial password to make sure GUI is inaccessible unless the
         -- user explicitly sets a password
@@ -223,7 +233,7 @@ function Syncthing:apiCall(api_path, method, source)
 
     local url = string.format("http://127.0.0.1:%s/rest/%s", self.syncthing_port, api_path)
 
-    logger.dbg("Syncthing: url:", url)
+    logger.dbg("[Syncthing] url:", url)
     local sink = {}
     socketutil:set_timeout(socketutil.LARGE_BLOCK_TIMEOUT, socketutil.LARGE_TOTAL_TIMEOUT)
     local code, headers, status = socket.skip(1, http.request({
@@ -239,8 +249,8 @@ function Syncthing:apiCall(api_path, method, source)
     socketutil:reset_timeout()
 
     if code ~= 200 then
-        logger.dbg("Syncthing: HTTP response code <> 200. Response status:", status or code)
-        logger.dbg("Syncthing: Response headers:", headers)
+        logger.dbg("[Syncthing] HTTP response code <> 200. Response status:", status or code)
+        logger.dbg("[Syncthing] Response headers:", headers)
         local info = InfoMessage:new{
             icon = "notice-warning",
             text = T(_("Syncthing error (%1)"), status or code),
@@ -600,6 +610,16 @@ function Syncthing:addToMainMenu(menu_items)
                     return self:getPendingMenu()
                 end,
             },
+            {
+                text = _("Start Syncthing with KOReader"),
+                checked_func = function() return self.autostart end,
+                enabled_func = function() return not self:isRunning() end,
+                callback = function()
+                    self.autostart = not self.autostart
+                    G_reader_settings:flipNilOrFalse("syncthing_autostart")
+                end,
+            },
+            
        }
     }
 end
