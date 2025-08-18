@@ -9,10 +9,14 @@ The method of running Syncthing is originally based on [The Anarcat's blog post]
 
 ## Project status
 
-- This plugin has not been widely tested. Make frequent data backups and use it
+- This plugin is provided as-is. Make frequent data backups and use it
   at your own risk!
-- Tested on Kobo Libra 2
 - Some features are not working yet, such as global discovery service
+
+## Tested devices
+
+- Kobo Libra 2
+- (Please send pull requests to add your tested device here!)
 
 ## Installation
 
@@ -54,19 +58,24 @@ The method of running Syncthing is originally based on [The Anarcat's blog post]
 
 - **Why would you want Syncthing on an e-reader?**
 
-  It keeps my books and annotations continuously synchronized with my computer
-  and my Android phone (which can has a Syncthing app). It comes in handy when
-  you read books with KOReader on multiple devices. For the privacy-conscious
-  people, Syncthing does not require creating a cloud account and storing your
-  data in their cloud.
+  It keeps my books and annotations continuously synchronized with my computer.
+  For the privacy-conscious people, Syncthing does not require you to create a
+  cloud account, and does not store your data in the cloud.
+
+  If you have multiple e-readers, it is also convenient to synchronize books
+  between the e-readers.
+
+  If you have an Android e-reader, you can use the Android [Syncthing
+  Fork](https://github.com/Catfriend1/syncthing-android) app for syncing. You
+  can then use the KOReader app on Android. Using this plugin on Android is not
+  supported.
 
 - **How well does it work?**
 
   The synchronization itself usually works quite well on the e-reader side, but
   the connectivity is also affected by your other devices and the local network
-  conditions. I will still need to iron out a few wrinkles to make the
-  experience great. But having a Syncthing menu right in KOReader is the first
-  step in making this accessible to the community.
+  conditions. Having a Syncthing menu right in KOReader is the first step in
+  making this accessible to the community.
 
 ## Developing
 
