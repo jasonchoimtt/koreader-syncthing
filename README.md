@@ -48,6 +48,8 @@ The method of running Syncthing is originally based on [The Anarcat's blog post]
 6.  Go to the *Pending* menu and accept the device.
 7.  On your other Syncthing device, add the e-reader to a folder.
 8.  Go to the *Pending* menu and accept the folder.
+    - Make sure that you set the path to under your user storage.
+    - For Kobo device, this should be a directory under `/mnt/onboard`.
 9.  View the *Status* menu to see sync status.
 10. For other options you will need to use the Syncthing GUI. Use *Set GUI
     Password* menu item to set GUI password and go to `http://<ereader-ip>:8384`
