@@ -17,11 +17,12 @@ The method of running Syncthing is originally based on [The Anarcat's blog post]
 
 ## Tested devices
 
-- Kobo Libra 2
-- Kobo Elipsa 2E
-- Kindle Scribe
 - Kindle Oasis
+- Kindle Scribe
 - Kindle Voyage
+- Kobo Clara BW
+- Kobo Elipsa 2E
+- Kobo Libra 2
 - (Please send pull requests to add your tested device here!)
 
 *Note*: If you own an Android e-reader, you should use [Syncthing Fork](https://github.com/Catfriend1/syncthing-android) instead. This plugin currently does not work on Android.
