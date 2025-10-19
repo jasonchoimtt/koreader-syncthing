@@ -49,9 +49,9 @@ The method of running Syncthing is originally based on [The Anarcat's blog post]
 
 ### Configure devices and folders
 
-4.  The Syncthing menu will be available under the Tools tab in the file
-    browser. Check *Syncthing* menu item to start the Syncthing server. Make
-    sure the e-reader is also connected to Wi-Fi.
+4.  The Syncthing menu will be available under the Bookmarks (or Tools) tab in the top
+    menu when a document is open. Check *Syncthing* menu item to start the Syncthing server. 
+    Make sure the e-reader is also connected to Wi-Fi.
 5.  On your other Syncthing device, add the e-reader by scanning the QR code or
     entering the device ID manually.
 6.  Go to the *Pending* menu and accept the device.
