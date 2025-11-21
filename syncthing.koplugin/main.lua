@@ -494,6 +494,7 @@ end
 function Syncthing:addToMainMenu(menu_items)
     menu_items.syncthing = {
         text = _("Syncthing"),
+        sorting_hint = "network",
         sub_item_table = {
             {
                 text = _("Syncthing"),
@@ -633,7 +634,5 @@ end
 function Syncthing:onDispatcherRegisterActions()
     Dispatcher:registerAction("toggle_syncthing_server", { category = "none", event = "ToggleSyncthingServer", title = _("Toggle Syncthing"), general=true})
 end
-
-require("insert_menu")
 
 return Syncthing
