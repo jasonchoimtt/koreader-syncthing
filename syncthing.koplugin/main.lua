@@ -110,7 +110,15 @@ function Syncthing:start(password)
 end
 
 function Syncthing:isRunning()
-    return util.pathExists(pid_path)
+    if not util.pathExists(pid_path) then return false end
+    local f = io.open(pid_path, "r")
+    if not f then return false end
+    local pid = tonumber(f:read("*l") or "")
+    f:close()
+    if pid and util.pathExists("/proc/" .. pid) then return true end
+    -- Stale PID file: clean it up so a fresh start is allowed
+    os.remove(pid_path)
+    return false
 end
 
 function Syncthing:stop()
