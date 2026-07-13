@@ -21,7 +21,7 @@ local random = require("random")
 local T = ffiutil.template
 
 local path = DataStorage:getFullDataDir()
-if not util.pathExists("dropbear") then
+if not util.pathExists("plugins/syncthing.koplugin/syncthing") then
     return { disabled = true, }
 end
 
@@ -33,6 +33,13 @@ local Syncthing = WidgetContainer:extend{
 local pid_path = "/tmp/syncthing_koreader.pid"
 local config_path = "settings/syncthing/config.xml"
 local device_id_path = "settings/syncthing/device-id"
+
+-- os.execute invokes a shell, so every value passed to the launcher must be
+-- quoted as one shell argument. In particular, KOReader's home directory can
+-- contain spaces (for example, "Kindle Library").
+local function shell_quote(value)
+    return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
+end
 
 function Syncthing:init()
     self.syncthing_port = G_reader_settings:readSetting("syncthing_port") or "8384"
@@ -57,10 +64,10 @@ function Syncthing:start(password)
         password = random.uuid()
     end
     local cmd = string.format("%s %s %s %s",
-        "./plugins/syncthing.koplugin/start-syncthing",
-        G_reader_settings:readSetting("home_dir"),
-        self.syncthing_port,
-        password or "")
+        shell_quote("./plugins/syncthing.koplugin/start-syncthing"),
+        shell_quote(G_reader_settings:readSetting("home_dir") or "/"),
+        shell_quote(self.syncthing_port),
+        shell_quote(password or ""))
 
     -- Start loopback interface so that we can access the Syncthing API later
     if Device:isKobo() then
@@ -121,15 +128,44 @@ function Syncthing:isRunning()
     return false
 end
 
-function Syncthing:stop()
-    os.execute("cat "..pid_path.." | xargs kill")
-    UIManager:show(InfoMessage:new {
-        text = T(_("Syncthing stopped.")),
-        timeout = 2,
-    })
+--- Stops the Syncthing process started by this plugin.
+--- @param force boolean If true, forces the process to stop if it doesn't exit gracefully.
+--- @return boolean Success, string|nil Error
+function Syncthing:stopPlugin(force)
+    if not self:isRunning() then
+        return true
+    end
 
-    if self:isRunning() then
-        os.remove(pid_path)
+    local function readPID()
+        local f = io.open(pid_path, "r")
+        if not f then return nil end
+        local s = f:read("*l")
+        f:close()
+        return s and tonumber(s) or nil
+    end
+
+    local pid = readPID()
+
+    local function isProcAlive(p)
+        return p and util.pathExists("/proc/" .. p)
+    end
+
+    local function send(sig, p)
+        return os.execute(string.format("pkill -%s -P %d && kill -%s %d", sig, p, sig, p)) == 0
+    end
+
+    send("TERM", pid)
+    for _ = 1, 20 do
+        if not isProcAlive(pid) then break end
+        ffiutil.sleep(0.1)
+    end
+
+    if isProcAlive(pid) and force then
+        send("KILL", pid)
+        for _ = 1, 10 do
+            if not isProcAlive(pid) then break end
+            ffiutil.sleep(0.1)
+        end
     end
 
     -- Plug the hole in the Kindle's firewall
@@ -140,9 +176,32 @@ function Syncthing:stop()
         os.execute(string.format("%s %s %s",
             "iptables -D OUTPUT -p tcp --sport", self.syncthing_port,
             "-m conntrack --ctstate ESTABLISHED -j ACCEPT"))
-	os.execute("iptables -D INPUT -i wlan0 -p tcp --dport 22000 -j ACCEPT")
-	os.execute("iptables -D INPUT -i wlan0 -p udp --dport 22000 -j ACCEPT")
-	os.execute("iptables -D INPUT -i wlan0 -p udp --dport 21027 -j ACCEPT")
+        os.execute("iptables -D INPUT -i wlan0 -p tcp --dport 22000 -j ACCEPT")
+        os.execute("iptables -D INPUT -i wlan0 -p udp --dport 22000 -j ACCEPT")
+        os.execute("iptables -D INPUT -i wlan0 -p udp --dport 21027 -j ACCEPT")
+    end
+
+    if not isProcAlive(pid) then
+        os.remove(pid_path)
+        return true
+    end
+    return false, "syncthing process did not exit"
+end
+
+function Syncthing:stop()
+    local ok, err = self:stopPlugin(false)
+    if ok then
+        UIManager:show(InfoMessage:new{
+            text = _("Syncthing stopped."),
+            timeout = 2,
+        })
+    else
+        logger.warn("Syncthing: graceful stop failed:", err)
+        UIManager:show(InfoMessage:new{
+            icon = "notice-warning",
+            text = _("Syncthing is still shutting down…"),
+            timeout = 3,
+        })
     end
 end
 
@@ -151,10 +210,12 @@ function Syncthing:onToggleSyncthingServer(callback)
 
     if self:isRunning() then
         self:stop()
+        if callback then callback() end
         safe_callback()
     else
-        NetworkMgr:runWhenOnline(function()
+        NetworkMgr:runWhenConnected(function()
             self:start()
+            if callback then callback() end
             safe_callback()
         end)
     end
@@ -404,7 +465,7 @@ function Syncthing:getPendingMenu()
     local sub_item_table = {}
 
     table.insert(sub_item_table, {
-        text = #devices and _("Pending Devices") or _("No Pending Devices"),
+        text = next(devices) ~= nil and _("Pending Devices") or _("No Pending Devices"),
         enabled_func = function() return false end
     })
 
@@ -451,7 +512,7 @@ function Syncthing:getPendingMenu()
     sub_item_table[#sub_item_table].separator = true
 
     table.insert(sub_item_table, {
-        text = #folders and _("Pending Folders") or _("No Pending Folders"),
+        text = next(folders) ~= nil and _("Pending Folders") or _("No Pending Folders"),
         enabled_func = function() return false end
     })
 
@@ -516,10 +577,10 @@ end
 function Syncthing:addToMainMenu(menu_items)
     menu_items.syncthing = {
         text = _("Syncthing"),
+        sorting_hint = "network",
         sub_item_table = {
             {
                 text = _("Syncthing"),
-                sorting_hint = "tools",
                 keep_menu_open = true,
                 checked_func = function() return self:isRunning() end,
                 callback = function(touchmenu_instance)
@@ -656,7 +717,5 @@ end
 function Syncthing:onDispatcherRegisterActions()
     Dispatcher:registerAction("toggle_syncthing_server", { category = "none", event = "ToggleSyncthingServer", title = _("Toggle Syncthing"), general=true})
 end
-
-require("insert_menu")
 
 return Syncthing

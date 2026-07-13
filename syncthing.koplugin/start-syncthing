@@ -19,6 +19,18 @@ else
     port=8384
 fi
 
+case "$port" in
+    ''|*[!0-9]*)
+        echo "Invalid Syncthing port: $port" >&2
+        exit 2
+        ;;
+esac
+
+if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+    echo "Invalid Syncthing port: $port" >&2
+    exit 2
+fi
+
 if [ -n "$3" ]; then
     password=$3
 fi
@@ -26,7 +38,7 @@ fi
 if [ ! -f "$config_dir/config.xml" ] || [ -n "$password" ]; then
     echo "Generating Syncthing configuration..."
     # Set HOME so that the default folder is created at $home_dir/Sync
-    HOME=$home_dir SSL_CERT_FILE="$cacert" "$syncthing" generate \
+    HOME="$home_dir" SSL_CERT_FILE="$cacert" "$syncthing" generate \
         --data="$config_dir" \
         --config="$config_dir" \
         --gui-user=syncthing \
@@ -40,10 +52,13 @@ SSL_CERT_FILE="$cacert" "$syncthing" device-id \
     --data="$config_dir" > "$config_dir/device-id"
 
 # We need to listen to 0.0.0.0 so that the GUI is accessible over the network
+# Keep the bundled executable and its configuration format in lockstep. A
+# self-upgrade can leave a newer config behind if an older plugin is installed.
 SSL_CERT_FILE="$cacert" "$syncthing" serve \
     --config="$config_dir" \
     --data="$config_dir" \
-    --gui-address=http://0.0.0.0:$port \
+    --gui-address="http://0.0.0.0:$port" \
+    --no-upgrade \
     --logfile="$config_dir/logs" \
     --log-max-old-files=10 \
     --log-max-size=1048576 &
