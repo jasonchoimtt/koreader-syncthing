@@ -1,6 +1,7 @@
 local DataStorage = require("datastorage")
 local Device =  require("device")
 local Dispatcher = require("dispatcher")
+local ConfirmBox = require("ui/widget/confirmbox")
 local InfoMessage = require("ui/widget/infomessage")  -- luacheck:ignore
 local QRMessage = require("ui/widget/qrmessage")
 local InputDialog = require("ui/widget/inputdialog")
@@ -33,6 +34,8 @@ local Syncthing = WidgetContainer:extend{
 local pid_path = "/tmp/syncthing_koreader.pid"
 local config_path = "settings/syncthing/config.xml"
 local device_id_path = "settings/syncthing/device-id"
+local plugin_path = "./plugins/syncthing.koplugin/"
+local syncthing_binary = plugin_path .. "syncthing"
 
 function Syncthing:init()
     self.syncthing_port = G_reader_settings:readSetting("syncthing_port") or "8384"
@@ -513,6 +516,156 @@ function Syncthing:getPendingMenu()
     return sub_item_table
 end
 
+function Syncthing:getCurrentVersion()
+    local cmd = syncthing_binary .. " --version"
+    local p = io.popen(cmd, "r")
+    if not p then
+        return nil
+    end
+
+    local output = p:read("a")
+    p:close()
+
+    -- Example: "syncthing v2.0.11 "Hafnium Hornet" (go1.25.3 linux-arm) builder@github.syncthing.net 2025-10-27 03:59:48 UTC"
+    local version = output:match("syncthing v(%d+%.%d+%.%d+)")
+    return version
+end
+
+function Syncthing:checkForUpdates()
+    if not NetworkMgr:isOnline() then
+        UIManager:show(InfoMessage:new{
+            text = _("Please connect to Wi-Fi to check for updates.")
+        })
+        return
+    end
+
+    local url = "https://api.github.com/repos/syncthing/syncthing/releases/latest"
+    local cmd = string.format("curl -L -s '%s'", url)
+
+    local p = io.popen(cmd, "r")
+    if not p then
+        UIManager:show(InfoMessage:new{
+            text = _("Failed to fetch update info.")
+        })
+        return
+    end
+    local content = p:read("a")
+    p:close()
+
+    local release = JSON.decode(content)
+    if not release or not release.tag_name then
+        UIManager:show(InfoMessage:new{
+            text = _("Failed to parse update info. " .. (release.message or ""))
+        })
+        return
+    end
+
+    local latest_version = release.tag_name:match("v(%d+%.%d+%.%d+)") or release.tag_name
+    local current_version = self:getCurrentVersion()
+
+    if current_version == latest_version then
+        UIManager:show(InfoMessage:new{
+            text = T(_("Syncthing is up to date (%1)."), current_version)
+        })
+        return
+    end
+
+    -- Find asset
+    local download_url = nil
+    for _, asset in ipairs(release.assets or {}) do
+        -- Look for linux-arm- and .tar.gz
+        if asset.name:find("linux%-arm%-") and asset.name:find("%.tar%.gz$") then
+            download_url = asset.browser_download_url
+            break
+        end
+    end
+
+    if not download_url then
+        UIManager:show(InfoMessage:new{
+            text = T(_("New version %1 found, but no compatible binary (linux-arm) was found."), latest_version)
+        })
+        return
+    end
+
+    local confirm = ConfirmBox:new{
+        text = T(_("Current version: %1\nLatest version: %2\n\nDo you want to update?"), current_version or "Unknown",
+            latest_version),
+        ok_callback = function()
+            UIManager:close(confirm)
+            self:performUpdate(download_url, latest_version)
+        end
+    }
+    UIManager:show(confirm)
+end
+
+function Syncthing:performUpdate(url, version)
+    -- Don't use /tmp since it only has 32M for old devices
+    local tar_file = plugin_path .. "tmp_syncthing_update.tar.gz"
+    local cmd = string.format("curl -L -s '%s' -o %s", url, tar_file)
+
+    if os.execute(cmd) ~= 0 then
+        UIManager:show(InfoMessage:new{
+            text = _("Download failed.")
+        })
+        return
+    end
+
+    -- Don't use /tmp since it only has 32M for old devices
+    local extract_dir = plugin_path .. "tmp_syncthing_extract"
+    os.execute("rm -r " .. extract_dir)
+    os.execute("mkdir -p " .. extract_dir)
+
+    if os.execute(string.format("tar -xzf %s -C %s", tar_file, extract_dir)) ~= 0 then
+        UIManager:show(InfoMessage:new{
+            text = _("Extraction failed.")
+        })
+        return
+    end
+
+    -- Find the binary inside extract_dir
+    local find_cmd = "find " .. extract_dir .. " -name syncthing -type f -maxdepth 2"
+    local f = io.popen(find_cmd)
+    local binary_path = f:read("l")
+    f:close()
+
+    if not binary_path then
+        UIManager:show(InfoMessage:new{
+            text = _("Binary not found in archive.")
+        })
+        return
+    end
+
+    -- Stop if running
+    local should_restart = false
+    if self:isRunning() then
+        self:stop()
+        should_restart = true
+    end
+
+    -- Replace existing binary
+    local target_path = syncthing_binary
+    if os.execute(string.format("cp %s %s", binary_path, target_path)) ~= 0 then
+        UIManager:show(InfoMessage:new{
+            text = _("Failed to copy binary.")
+        })
+        return
+    end
+
+    os.execute("chmod +x " .. target_path)
+
+    -- Clean up
+    os.remove(tar_file)
+    os.execute("rm -r " .. extract_dir)
+
+    if should_restart then
+        self:start()
+    end
+
+    UIManager:show(InfoMessage:new{
+        text = T(_("Updated to version %1."), version)
+    })
+end
+
 function Syncthing:addToMainMenu(menu_items)
     menu_items.syncthing = {
         text = _("Syncthing"),
@@ -648,8 +801,14 @@ function Syncthing:addToMainMenu(menu_items)
                     G_reader_settings:flipNilOrFalse("syncthing_autostart")
                 end,
             },
-            
-       }
+            {
+                text = _("Check for Syncthing Updates"),
+                keep_menu_open = true,
+                callback = function()
+                    self:checkForUpdates()
+                end,
+            },
+        }
     }
 end
 

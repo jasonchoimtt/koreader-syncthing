@@ -107,7 +107,7 @@ The method of running Syncthing is originally based on [The Anarcat's blog post]
 
 ## TODO
 
-- [ ] Pull latest syncthing binary from official releases
+- [x] Pull latest syncthing binary from official releases
 - [ ] Allow adding device to folder from e-reader
 - [ ] Properly accept three-way sharing
 - [ ] Fix global discovery service functionality
